@@ -1,0 +1,47 @@
+services:
+  yahoo-mcp:
+    build: .
+    container_name: yahoo-finance-mcp
+    env_file:
+      - .env
+    environment:
+      - MCP_TRANSPORT=streamable-http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8000
+      - MCP_PATH=/mcp
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/mcp', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "8000:8000"
+      - "9100:9100"
+
+  redis:
+    image: redis:7-alpine
+    container_name: yahoo-finance-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "6379:6379"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: yahoo-finance-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      yahoo-mcp:
+        condition: service_healthy

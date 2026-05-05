@@ -88,11 +88,34 @@ class YahooFinanceService:
         return normalized
 
     @staticmethod
+    def _to_json_safe(value: Any) -> Any:
+        """Converte recursivamente valores para tipos serializáveis em JSON."""
+        if isinstance(value, dict):
+            return {str(key): YahooFinanceService._to_json_safe(val) for key, val in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [YahooFinanceService._to_json_safe(item) for item in value]
+        if hasattr(value, "item") and callable(value.item):
+            try:
+                return YahooFinanceService._to_json_safe(value.item())
+            except Exception:
+                pass
+        if hasattr(value, "isoformat") and callable(value.isoformat):
+            try:
+                return value.isoformat()
+            except Exception:
+                pass
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        return str(value)
+
+    @staticmethod
     def _normalize_dataframe(dataframe: Any) -> dict[str, Any]:
         """Converte DataFrame em dicionário serializável para resposta MCP."""
         if dataframe is None or getattr(dataframe, "empty", True):
             return {}
-        return dataframe.fillna("").to_dict()
+
+        normalized = dataframe.fillna("").to_dict()
+        return YahooFinanceService._to_json_safe(normalized)
 
     def get_cash_flow(self, symbol: str) -> dict[str, Any]:
         """Retorna fluxo de caixa anual do ticker."""
